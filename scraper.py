@@ -1,11 +1,9 @@
 import requests
-import json
 import time
-import pandas as pd # Tambahan buat nyimpen data ke CSV
+import pandas as pd
 
 API_KEY = 'AIzaSyDXjTxREsFVzwjki2Q-Gt5SG3YxOuqUAp0'
 
-# Sample 5 kecamatan dari total 44 kecamatan di Jakarta
 kecamatan_list = [
     # --- Jakarta Pusat (8 Kecamatan) ---
     "Cempaka Putih, Jakarta Pusat",
@@ -64,9 +62,20 @@ kecamatan_list = [
     "Kepulauan Seribu Utara, Kepulauan Seribu"
 ]
 
-def scrape_toko_bangunan(kecamatan):
+# 2. List Kategori Toko yang lo mau
+kategori_list = [
+    "toko bangunan",
+    "toko listrik",
+    "toko kayu",
+    "toko kaca",
+    "toko besi",
+    "toko alumunium"
+]
+
+def scrape_toko(kategori, kecamatan):
     endpoint_url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-    query = f"toko bangunan in {kecamatan}"
+    # Querynya dinamis gabungin kategori dan kecamatan
+    query = f"{kategori} in {kecamatan}"
     
     params = {
         'query': query,
@@ -74,14 +83,20 @@ def scrape_toko_bangunan(kecamatan):
     }
     
     response = requests.get(endpoint_url, params=params)
-    results = json.loads(response.content)
+    results = response.json()
     
+    status = results.get('status')
+    # ZERO_RESULTS itu wajar kalau misal di kecamatan itu emang gak ada toko kacanya
+    if status != 'OK' and status != 'ZERO_RESULTS': 
+        print(f"⚠️ Error nyari {kategori} di {kecamatan}: {status}")
+        return []
+        
     toko_list = []
     
-    # Ambil maksimal 8 toko teratas
     for place in results.get('results', [])[:8]:
         toko_list.append({
-            'Kecamatan': kecamatan, # Kita catet juga kecamatannya biar gampang difilter nanti
+            'Kategori': kategori.title(), # title() bikin huruf depannya kapital (Toko Listrik)
+            'Kecamatan': kecamatan,
             'Nama Toko': place.get('name'),
             'Alamat': place.get('formatted_address'),
             'Rating': place.get('rating', 0)
@@ -89,24 +104,25 @@ def scrape_toko_bangunan(kecamatan):
         
     return toko_list
 
-# Siapkan list kosong untuk nampung SEMUA data
 semua_data = []
 
-# Looping ke setiap kecamatan
-print("Mulai proses scraping...")
+print("Mulai proses scraping multi-kategori...")
+
+# Nested Looping (Looping di dalam Looping)
 for kec in kecamatan_list:
-    print(f"Mengambil data di: {kec}")
-    data_per_kecamatan = scrape_toko_bangunan(kec)
-    semua_data.extend(data_per_kecamatan) # Gabungin datanya
+    print(f"\n--- Mengambil data di: {kec} ---")
     
-    # NAH DI SINI POSISI time.sleep NYA BRO!
-    # Berhenti 2 detik sebelum lanjut ke kecamatan berikutnya biar aman dari blokir Google
-    time.sleep(2) 
+    for kat in kategori_list:
+        print(f"🔍 Mencari {kat}...")
+        data_toko = scrape_toko(kat, kec)
+        semua_data.extend(data_toko)
+        
+        # Jeda waktu 2 detik per KATEGORI biar aman dari blokir Google
+        time.sleep(2) 
 
-# --- FORMAT DATANYA ---
-# Kita ubah data list tadi jadi DataFrame (Tabel) pakai Pandas
-df = pd.DataFrame(semua_data)
-
-# Simpan jadi file CSV
-df.to_csv('data_toko_bangunan_jkt.csv', index=False)
-print("Scraping Selesai! Data berhasil disimpan di data_toko_bangunan_jkt.csv")
+if len(semua_data) > 0:
+    df = pd.DataFrame(semua_data)
+    df.to_excel('data_toko_bangunan_jkt.xlsx', index=False, engine='openpyxl')
+    print("\n✅ Scraping Selesai! Data multi-kategori berhasil disimpan ke data_toko_bangunan_jkt.xlsx")
+else:
+    print("\n❌ Gagal nyimpen Excel. Datanya kosong bro!")
