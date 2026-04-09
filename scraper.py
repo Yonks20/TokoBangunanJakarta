@@ -93,7 +93,7 @@ def scrape_toko(kategori, kecamatan):
         
     toko_list = []
     
-    for place in results.get('results', [])[:8]:
+    for place in results.get('results', [])[:25]:
         toko_list.append({
             'Kategori': kategori.title(), # title() bikin huruf depannya kapital (Toko Listrik)
             'Kecamatan': kecamatan,
